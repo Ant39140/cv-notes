@@ -35,6 +35,7 @@ if not images:
 
 print(f"找到 {len(images)} 张图片")
 
+
 valid_images = []
 for image in images:
     img = cv2.imread(image)
@@ -48,6 +49,7 @@ for image in images:
         #  实现————自适应阈值（补光），归一化图像（调对比度），快速检查是否为棋盘
     )
 
+##  ==========比较神秘的调整部分，因为自带函数识别起点会识别成右下角，这里是对图像进行一步翻转==============
     if ret :
         # 获取第一个角点和最后一个角点的坐标
         p0 = corners[0][0]
@@ -61,7 +63,8 @@ for image in images:
             #print(f"图像颠倒 {image}，需翻转...")
 
             corners = corners[::-1].copy()
-            #这里的copy可以解决Numpy只反向读取，而没有真正创建，导致后续cornerSubpix报错
+            #这里的copy可以解决Numpy只反向读取，而没有真正创建一个反向的点列，导致后续cornerSubpix报错
+##  =======================================翻转结束===========================================
 
         objPoints.append(objPoint)
 
@@ -129,15 +132,15 @@ np.savez("fisheye_calibration", K=K, D=D)
 print("\n参数已保存为 'fisheye_calibration.npz'")
 
 test_img_path = valid_images[0]
-img = cv2.imread(test_img_path)
-h, w = img.shape[:2]
+imgForTest = cv2.imread(test_img_path)
+h, w = imgForTest.shape[:2]
 
-##============注意：如果使用这个函数因为神秘原因会导致图像转换结果很搞笑===============
+##============注意：如果使用这个函数因为神秘原因会导致图像转换后的结果很搞笑================
 #  调整内参，均衡一下黑边和图像内容缺失
 #  revised_K = (cv2.fisheye.estimateNewCameraMatrixForUndistortRectify
 #                     (K, D, (w, h), np.eye(3), balance=0.0)
 #              )
-
+##=============================================================================
 
 revised_K = K.copy()
 # 手动缩放系数  且  系数越小 -> 视野越广
@@ -153,10 +156,25 @@ revised_K[1, 2] = h / 2
 map1, map2 = (cv2.fisheye.initUndistortRectifyMap
               (K, D, np.eye(3), revised_K, (w, h), cv2.CV_16SC2))
 
-corrected_img = (cv2.remap
-                    (img, map1, map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-                 )
-cv2.imshow("img", img)
-cv2.imshow("corrected_img", corrected_img)
-cv2.waitKey(0)
+
+SAVE_DIR = '../data/ImagesCorrected'
+for img_path in images:
+    img = cv2.imread(img_path)
+    corrected_img = cv2.remap(
+        img ,
+        map1,
+        map2,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT
+    )
+    file_name = os.path.basename(img_path)
+    save_path = os.path.join(SAVE_DIR,f"corrected_{file_name}")
+
+    cv2.imwrite(save_path, corrected_img)
+    print(f"Saved {save_path}")
+
+    cv2.imshow("image", img)
+    cv2.imshow("corrected_img", corrected_img)
+    cv2.waitKey(0)
+
 cv2.destroyAllWindows()
